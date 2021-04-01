@@ -1,0 +1,24 @@
+# permissions for end users to edit policyshepherds.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: policyshepherd-editor-role
+rules:
+- apiGroups:
+  - policy.open-cluster-management.io
+  resources:
+  - policyshepherds
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy.open-cluster-management.io
+  resources:
+  - policyshepherds/status
+  verbs:
+  - get

@@ -1,0 +1,7 @@
+domain: open-cluster-management.io
+repo: github.com/open-cluster-management/policy-shepherd
+resources:
+- group: policy
+  kind: PolicyShepherd
+  version: v1alpha1
+version: "2"
