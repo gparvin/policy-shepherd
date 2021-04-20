@@ -321,11 +321,11 @@ func processACSPolicies(shepherd *policyv1alpha1.PolicyShepherd) (bool, error) {
 				deletePolicy(id)
 				deletedPolicies = append(deletedPolicies, policyName)
 			}
-			shepherd.Status.CreateStatus[index].Name = policyName
-			shepherd.Status.CreateStatus[index].UploadStatus = policyv1alpha1.Completed
+			shepherd.Status.DeleteStatus[index].Name = policyName
+			shepherd.Status.DeleteStatus[index].UploadStatus = policyv1alpha1.Completed
 		} else {
-			shepherd.Status.CreateStatus[index].Name = policyName
-			shepherd.Status.CreateStatus[index].UploadStatus = policyv1alpha1.Completed
+			shepherd.Status.DeleteStatus[index].Name = policyName
+			shepherd.Status.DeleteStatus[index].UploadStatus = policyv1alpha1.Completed
 		}
 	}
 
@@ -347,13 +347,12 @@ func processACSPolicies(shepherd *policyv1alpha1.PolicyShepherd) (bool, error) {
 				shepherd.Status.CreateStatus[index].UploadStatus = policyv1alpha1.Completed
 			} else {
 				id, err := createPolicy(jsonstring)
+				shepherd.Status.CreateStatus[index].Name = policyName
 				if err != nil {
 					reconciler.Log.Error(err, "Failed to create the policy.", "name", policyName)
-					shepherd.Status.CreateStatus[index].Name = policyName
 					shepherd.Status.CreateStatus[index].UploadStatus = policyv1alpha1.Failed
 				} else {
 					reconciler.Log.Info("The policy was created in ACS", "id", id, "name", policyName)
-					shepherd.Status.CreateStatus[index].Name = policyName
 					shepherd.Status.CreateStatus[index].UploadStatus = policyv1alpha1.Completed
 				}
 			}
@@ -361,32 +360,40 @@ func processACSPolicies(shepherd *policyv1alpha1.PolicyShepherd) (bool, error) {
 	}
 
 	// disable policies
-	for index, policyName := range shepherd.Spec.DeletePolicyList {
+	for index, policyName := range shepherd.Spec.DisablePolicyList {
 		if ok, id, entry := doesPolicyExist(list, policyName); ok {
 			reconciler.Log.Info("The policy exists in ACS so it will be disabled", "name", policyName, "id", id)
-			setPolicyDisabled(entry, id, true)
-			shepherd.Status.CreateStatus[index].Name = policyName
-			shepherd.Status.CreateStatus[index].UploadStatus = policyv1alpha1.Completed
+			err = setPolicyDisabled(entry, id, true)
+			shepherd.Status.DisableStatus[index].Name = policyName
+			if err != nil {
+				shepherd.Status.DisableStatus[index].UploadStatus = policyv1alpha1.Failed
+			} else {
+				shepherd.Status.DisableStatus[index].UploadStatus = policyv1alpha1.Completed
+			}
 		} else {
 			// What is the status if the policy to disable does not exist - assuming OK since
 			// a missing policy is definitely disabled
-			shepherd.Status.CreateStatus[index].Name = policyName
-			shepherd.Status.CreateStatus[index].UploadStatus = policyv1alpha1.Completed
+			shepherd.Status.DisableStatus[index].Name = policyName
+			shepherd.Status.DisableStatus[index].UploadStatus = policyv1alpha1.Completed
 		}
 	}
 
-	// disable policies
-	for index, policyName := range shepherd.Spec.DeletePolicyList {
+	// enable policies
+	for index, policyName := range shepherd.Spec.EnablePolicyList {
 		if ok, id, entry := doesPolicyExist(list, policyName); ok {
 			reconciler.Log.Info("The policy exists in ACS so it will be enabled", "name", policyName, "id", id)
-			setPolicyDisabled(entry, id, false)
-			shepherd.Status.CreateStatus[index].Name = policyName
-			shepherd.Status.CreateStatus[index].UploadStatus = policyv1alpha1.Completed
+			err = setPolicyDisabled(entry, id, false)
+			shepherd.Status.EnableStatus[index].Name = policyName
+			if err != nil {
+				shepherd.Status.EnableStatus[index].UploadStatus = policyv1alpha1.Failed
+			} else {
+				shepherd.Status.EnableStatus[index].UploadStatus = policyv1alpha1.Completed
+			}
 		} else {
 			// What is the status if the policy to enable does not exist - assuming Failed since
 			// a missing policy is definitely not enabled
-			shepherd.Status.CreateStatus[index].Name = policyName
-			shepherd.Status.CreateStatus[index].UploadStatus = policyv1alpha1.Failed
+			shepherd.Status.EnableStatus[index].Name = policyName
+			shepherd.Status.EnableStatus[index].UploadStatus = policyv1alpha1.Failed
 		}
 	}
 
@@ -401,7 +408,7 @@ func setPolicyDisabled(acspolicy map[string]interface{}, id string, flag bool) e
 		return err
 	}
 
-	url := fmt.Sprintf("https://%s/v1/policies", getStackroxHostname())
+	url := fmt.Sprintf("https://%s/v1/policies/%s", getStackroxHostname(), id)
 	policy := fmt.Sprintf("{\"id\":\"%s\",\"disabled\":%t}", id, flag)
 	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(policy))
 	if err != nil {
